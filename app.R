@@ -15,7 +15,7 @@ load_data <- function() {
         as_tibble(.) %>%
         slice(which(str_detect(Locations, 'CITY/COMMUNITY') == T)+1:nrow(.)) %>%
         janitor::clean_names() %>%
-        filter(!str_detect(locations, 'Investigation')) %>%
+        filter(!str_detect(locations, 'Investigation') & !str_detect(locations, 'Temple')) %>%
         mutate(., locations = str_remove_all(locations, '\\*')) %>%
         mutate(total_cases = as.numeric(total_cases)) %>%
         left_join(., geocode_locations, by = c('locations' = 'city')) %>%
@@ -88,8 +88,8 @@ sidebar <- dashboardSidebar(
 )
 
 body <- dashboardBody(
-    tags$style(type = "text/css", "#map {height: calc(100vh - 200px) !important;}"),
-    tags$style(type = "text/css", "#california_map {height: calc(100vh - 200px) !important;}"),
+    tags$style(type = "text/css", "#map {height: calc(100vh - 300px) !important;}"),
+    tags$style(type = "text/css", "#california_map {height: calc(100vh - 300px) !important;}"),
     tags$head(
         tags$script(
             '!function(d,s,id){var js,fjs=d.getElementsByTagName(s)    [0],p=/^http:/.test(d.location)?\'http\':\'https\';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+"://platform.twitter.com/widgets.js";fjs.parentNode.insertBefore(js,fjs);}}(document,"script","twitter-wjs");'
