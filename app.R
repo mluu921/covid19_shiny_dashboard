@@ -16,6 +16,7 @@ load_data <- function() {
         slice(which(str_detect(Locations, 'CITY/COMMUNITY') == T)+1:nrow(.)) %>%
         janitor::clean_names() %>%
         filter(!str_detect(locations, 'Investigation')) %>%
+        mutate(., locations = str_remove_all(locations, '\\*')) %>%
         mutate(total_cases = as.numeric(total_cases)) %>%
         left_join(., geocode_locations, by = c('locations' = 'city')) %>%
         mutate(
