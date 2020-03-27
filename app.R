@@ -128,7 +128,7 @@ body <- dashboardBody(
                 h4('Los Angeles County, Department of Public Health'),
                 a(
                     'http://www.publichealth.lacounty.gov/media/Coronavirus/locations.htm',
-                    href = 'http://publichealth.lacounty.gov/media/Coronavirus/locations.htm'
+                    href = 'http://www.publichealth.lacounty.gov/media/Coronavirus/locations.htm'
                 ),
                 h4('Novel Coronavirus (COVID-19) Cases, provided by JHU CSSE'),
                 a(
