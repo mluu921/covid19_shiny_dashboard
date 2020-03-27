@@ -8,7 +8,7 @@ library(lubridate)
 
 ################################## loading the data
 load_data <- function() {
-    url <- 'http://publichealth.lacounty.gov/media/Coronavirus/locations.htm'
+    url <- 'http://www.publichealth.lacounty.gov/media/Coronavirus/locations.htm'
     geocode_locations <- read_rds('geocoded_lacounty_cities.rds')
     dat <- read_html(url) %>%
         html_table() %>% .[[1]] %>%
@@ -127,7 +127,7 @@ body <- dashboardBody(
                 title = 'Sources',
                 h4('Los Angeles County, Department of Public Health'),
                 a(
-                    'http://publichealth.lacounty.gov/media/Coronavirus/locations.htm',
+                    'http://www.publichealth.lacounty.gov/media/Coronavirus/locations.htm',
                     href = 'http://publichealth.lacounty.gov/media/Coronavirus/locations.htm'
                 ),
                 h4('Novel Coronavirus (COVID-19) Cases, provided by JHU CSSE'),
@@ -235,7 +235,7 @@ server <- function(input, output) {
         
         last_update <- function() {
             url <-
-                'http://publichealth.lacounty.gov/media/Coronavirus/locations.htm'
+                'http://www.publichealth.lacounty.gov/media/Coronavirus/locations.htm'
             
             last_update <- read_html(url) %>%
                 html_node(xpath = '//*[@id="content"]/div[2]/div[1]/div[6]/p/small/text()') %>%
@@ -254,7 +254,7 @@ server <- function(input, output) {
     output$box_total_deaths <- renderValueBox({
         total_deaths <- function() {
             url <-
-                'http://publichealth.lacounty.gov/media/Coronavirus/locations.htm'
+                'http://www.publichealth.lacounty.gov/media/Coronavirus/locations.htm'
             
             deaths <- read_html(url) %>%
                 html_node(xpath = '//*[@id="content"]/div[2]/div[1]/div[4]/div/div') %>%
@@ -269,7 +269,7 @@ server <- function(input, output) {
     output$box_total_cases <- renderValueBox({
         total_cases <- function() {
             url <-
-                'http://publichealth.lacounty.gov/media/Coronavirus/locations.htm'
+                'http://www.publichealth.lacounty.gov/media/Coronavirus/locations.htm'
             
             cases <- read_html(url) %>%
                 html_node(xpath = '//*[@id="content"]/div[2]/div[1]/div[3]/div/div') %>%
