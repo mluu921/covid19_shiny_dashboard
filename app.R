@@ -5,6 +5,7 @@ library(geojsonio)
 library(shiny)
 library(shinydashboard)
 library(lubridate)
+library(plotly)
 
 ################################## loading the data
 load_data <- function() {
@@ -27,7 +28,7 @@ load_data <- function() {
             label = map(label, ~ htmltools::HTML(.x))
         ) %>%
         filter(
-            total_cases != 0
+            total_cases != 0 & locations != 'City of Los Angeles'
         )
     
     return(dat)
@@ -75,8 +76,33 @@ load_california_data <- function() {
     
 }
 
-load_california_data()
+# load_california_data()
 
+download_covid_timeseries <- function() {
+    url <-
+        'https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_daily_reports/'
+    
+    possibly_read_csv <- possibly(read_csv, otherwise = NA)
+    
+    dat <- tibble(date = seq.Date(mdy('1/27/2020'), Sys.Date(), '1 day'),
+                  file = paste0(format(date, '%m-%d-%Y'), '.csv')) %>%
+        mutate(
+            url = paste0(url, file),
+            data = map(
+                url,
+                ~ possibly_read_csv(.x, col_types = cols(.default = 'c'))
+            )
+        ) %>%
+        select(date, data) %>%
+        filter(., !is.na(data)) %>%
+        unnest(data) %>%
+        janitor::clean_names() %>%
+        mutate_if(is.character, ~ parse_guess(.x))
+    
+    return(dat)
+}
+
+time_series_data <- download_covid_timeseries()
 
 ################################## shiny dashboard components
 header <- dashboardHeader(
@@ -118,6 +144,10 @@ body <- dashboardBody(
             tabPanel(title = 'California',
                      leafletOutput('california_map'),
                      DT::dataTableOutput('california_table')),
+            # tabPanel(title = 'Time Series',
+            #          selectInput('input_county', 'County', choices = c('Los Angeles', 'San Diego'),
+            #                      selectize = T, multiple = T),
+            #          plotlyOutput('timeseries_plot')),
             tabPanel(
                 title = 'Twitter',
                 a(
@@ -152,6 +182,7 @@ body <- dashboardBody(
         
     )
 )
+
 ##################################
 
 ui <- dashboardPage(
@@ -176,7 +207,7 @@ server <- function(input, output) {
                     lat = ~ lat,
                     radius = ~ sqrt(total_cases)*5,
                     fillColor = ~ legend_colors(total_cases),
-                    fillOpacity = .75,
+                    fillOpacity = .50,
                     weight = 2,
                     color = 'black',
                     label = ~ label
@@ -207,7 +238,7 @@ server <- function(input, output) {
                     lat = ~ lat,
                     radius = ~ sqrt(confirmed) * 2,
                     fillColor = ~ legend_colors(confirmed),
-                    fillOpacity = .75,
+                    fillOpacity = .50,
                     weight = 2,
                     color = 'black',
                     label = ~ label
@@ -260,7 +291,7 @@ server <- function(input, output) {
                 'http://www.publichealth.lacounty.gov/media/Coronavirus/locations.htm'
             
             deaths <- read_html(url) %>%
-                html_node(xpath = '//*[@id="content"]/div[2]/table/tbody/tr[6]/td/strong') %>%
+                html_node(xpath = '//*[@id="content"]/div[2]/table[1]/tbody/tr[1]/td') %>%
                 html_text()
             
             return(deaths)
@@ -275,7 +306,7 @@ server <- function(input, output) {
                 'http://www.publichealth.lacounty.gov/media/Coronavirus/locations.htm'
             
             cases <- read_html(url) %>%
-                html_node(xpath = '//*[@id="content"]/div[2]/table/tbody/tr[1]/td/strong') %>%
+                html_node(xpath = '//*[@id="content"]/div[2]/table[1]/tbody/tr[6]/td') %>%
                 html_text()
             
             return(cases)
@@ -285,7 +316,49 @@ server <- function(input, output) {
         
     })
     
+    # output$timeseries_plot <- renderPlotly({
+    #     
+    # 
+    #     reactive_county <- reactive({input$input_county})
+    #     
+    #     make_trend_plot <- function(data, county) {
+    # 
+    #         plot_dat <- data %>% filter(., admin2 %in% county)
+    # 
+    #         label_dat <- plot_dat %>% group_by(., admin2) %>% slice(n())
+    # 
+    #         plot <- ggplot(plot_dat,
+    #                        aes(x = date, y = confirmed, color = admin2)) +
+    #             geom_point() +
+    #             geom_line() +
+    #             geom_text_repel(
+    #                 data = label_dat,
+    #                 aes(label = admin2),
+    #                 direction = 'y',
+    #                 hjust = 0,
+    #                 nudge_x = .1,
+    #                 size = 5
+    #             ) +
+    #             scale_x_date(limits = c(mdy('3/22/2020'), Sys.Date())) +
+    #             scale_y_continuous(limits = c(0, NA)) +
+    #             theme_minimal() +
+    #             theme(legend.position = 'none',
+    #                   axis.title.y = element_text(size = 15),
+    #                   axis.text = element_text(size = 12)) +
+    #             geom_smooth(method = 'lm',
+    #                         linetype = 'dotted',
+    #                         alpha = .25,
+    #                         se = F) +
+    #             labs(x = '', y = 'Confirmed COVID-19 Cases')
+    # 
+    #         return(plot)
+    #     }
+    #     
+    #     make_trend_plot(data = time_series_data, reactive_county()) %>% ggplotly()
+    #     
+    # })
 }
+
 # Run the application 
 shinyApp(ui = ui, server = server)
 
