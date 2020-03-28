@@ -9,7 +9,7 @@ library(lubridate)
 ################################## loading the data
 load_data <- function() {
     url <- 'http://www.publichealth.lacounty.gov/media/Coronavirus/locations.htm'
-    geocode_locations <- read_rds('geocoded_lacounty_cities.rds')
+    geocode_locations <- read_rds('geo_data.rds')
     dat <- read_html(url) %>%
         html_table() %>% .[[1]] %>%
         as_tibble(.) %>%
@@ -18,16 +18,19 @@ load_data <- function() {
         filter(!str_detect(locations, 'Investigation') & !str_detect(locations, 'Temple')) %>%
         mutate(., locations = str_remove_all(locations, '\\*')) %>%
         mutate(total_cases = as.numeric(total_cases)) %>%
-        left_join(., geocode_locations, by = c('locations' = 'city')) %>%
+        left_join(., geocode_locations) %>%
         mutate(
-            label = glue::glue('<strong>{locations}</strong> <br> <strong>{total_cases}</strong> Confirmed Cases')
+            total_case_label = ifelse(is.na(total_cases), '--', total_cases),
+            label = glue::glue('<strong>{locations}</strong> <br> <strong>{total_case_label}</strong> Confirmed Cases')
         ) %>%
         mutate(
             label = map(label, ~ htmltools::HTML(.x))
+        ) %>%
+        filter(
+            total_cases != 0
         )
     
     return(dat)
-    
 }
 
 data <- load_data()
@@ -55,7 +58,7 @@ load_california_data <- function() {
     
     data <- data %>%
         # filter(., country_region == 'US') %>%
-        filter(., province_state == 'California') %>%
+        filter(., province_state == 'California' & !is.na(fips)) %>%
         mutate(
             combined_key = str_remove_all(combined_key, ', California, US'),
             label = glue::glue('<strong>{combined_key}</strong> <br> <strong>{confirmed}</strong> Confirmed Cases')
@@ -163,7 +166,7 @@ server <- function(input, output) {
     output$map <- renderLeaflet({
         make_map <- function() {
             legend_colors <-
-                colorNumeric('YlOrRd', c(min(data$total_cases), max(data$total_cases)))
+                colorNumeric('YlOrRd', c(min(data$total_cases, na.rm = T), max(data$total_cases, na.rm = T)))
             
             map <- leaflet(data) %>%
                 addProviderTiles(providers$CartoDB.Positron) %>%
@@ -238,7 +241,7 @@ server <- function(input, output) {
                 'http://www.publichealth.lacounty.gov/media/Coronavirus/locations.htm'
             
             last_update <- read_html(url) %>%
-                html_node(xpath = '//*[@id="content"]/div[2]/div[1]/div[6]/p/small/text()') %>%
+                html_node(xpath = '//*[@id="content"]/div[2]/table/caption') %>%
                 html_text() %>%
                 str_extract(., './.+') %>%
                 paste0(., '/2020') %>%
@@ -257,7 +260,7 @@ server <- function(input, output) {
                 'http://www.publichealth.lacounty.gov/media/Coronavirus/locations.htm'
             
             deaths <- read_html(url) %>%
-                html_node(xpath = '//*[@id="content"]/div[2]/div[1]/div[4]/div/div') %>%
+                html_node(xpath = '//*[@id="content"]/div[2]/table/tbody/tr[6]/td/strong') %>%
                 html_text()
             
             return(deaths)
@@ -272,7 +275,7 @@ server <- function(input, output) {
                 'http://www.publichealth.lacounty.gov/media/Coronavirus/locations.htm'
             
             cases <- read_html(url) %>%
-                html_node(xpath = '//*[@id="content"]/div[2]/div[1]/div[3]/div/div') %>%
+                html_node(xpath = '//*[@id="content"]/div[2]/table/tbody/tr[1]/td/strong') %>%
                 html_text()
             
             return(cases)
