@@ -250,7 +250,7 @@ server <- function(input, output) {
         table_data <- data %>% select(., locations, total_cases) %>% arrange(., desc(total_cases))
         
         DT::datatable(table_data, colnames = c('City', 'Confirmed'),
-                      caption = NULL)
+                      caption = NULL, rownames = F)
         
     })
     
@@ -260,9 +260,12 @@ server <- function(input, output) {
             arrange(., desc(confirmed)) %>%
             mutate(rate_10000 = format(round(rate_10000, 2), 2)) %>%
             mutate(death_10000 = format(round((deaths / population) * 10000, 2), 2)) %>%
-            mutate(combined_key = str_remove_all(combined_key, ', California, US')) 
+            mutate(combined_key = str_remove_all(combined_key, ', California, US'))  %>%
+            select(., -population)
         
-        DT::datatable(data, colnames = c('Location', 'Confirmed', 'Deaths', 'Population', 'Cases per 10,000', 'Deaths per 10,000'))
+        DT::datatable(data, 
+                      colnames = c('Location', 'Confirmed', 'Deaths', 'Case per 10,000', 'Death per 10,000'),
+                      rownames = F)
     })
     
     output$box_last_update <- renderValueBox({
