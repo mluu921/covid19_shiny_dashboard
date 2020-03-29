@@ -366,7 +366,10 @@ server <- function(input, output) {
             ) %>%
                 layout(
                     xaxis = list(title = ''),
-                    yaxis = list(title = 'Confirmed COVID-19 Cases')
+                    yaxis = list(title = 'Confirmed COVID-19 Cases'),
+                    legend = list(orientation = "h",   # show entries horizontally
+                                  xanchor = "center",  # use center of legend as anchor
+                                  x = 0.5)
                 )
             
         }
