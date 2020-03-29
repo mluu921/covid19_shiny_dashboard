@@ -5,9 +5,8 @@ account: mluu921
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 1979350
-bundleId: 2932819
+bundleId: 2937602
 url: https://mluu921.shinyapps.io/covid19lac/
-when: 1585327560.54663
+when: 1585437022.70676
 asMultiple: FALSE
 asStatic: FALSE
-ignoredFiles: 00-geocode_missing_locations.R

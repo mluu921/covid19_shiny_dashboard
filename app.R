@@ -36,55 +36,15 @@ load_data <- function() {
 
 data <- load_data()
 
-load_california_data <- function() {
-    process_today_data <- function() {
-        url <- 'https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_daily_reports/'
-        data <- read_csv(paste0(url, format(Sys.Date(), '%m-%d-%Y.csv'))) %>% janitor::clean_names()
-        return(data)
-    }
-    
-    process_yesterday_data <- function() {
-        url <- 'https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_daily_reports/'
-        data <- read_csv(paste0(url, format(Sys.Date()-1, '%m-%d-%Y.csv'))) %>% janitor::clean_names()
-        return(data)
-    }
-    
-    try_today <- try(process_today_data())
-    
-    if(inherits(try_today, 'try-error') == T) {
-        data <- process_yesterday_data()
-    } else {
-        data <- process_today_data()
-    }
-    
-    data <- data %>%
-        # filter(., country_region == 'US') %>%
-        filter(., province_state == 'California' & !is.na(fips)) %>%
-        mutate(
-            combined_key = str_remove_all(combined_key, ', California, US'),
-            label = glue::glue('<strong>{combined_key}</strong> <br> <strong>{confirmed}</strong> Confirmed Cases')
-        ) %>%
-        mutate(
-            label = map(label, ~ htmltools::HTML(.x))
-        ) %>%
-        filter(
-            confirmed != 0
-        )
-        
-    
-    return(data)
-    
-}
-
-# load_california_data()
-
-download_covid_timeseries <- function() {
-    url <-
-        'https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_daily_reports/'
+download_california_data <- function() {
     
     possibly_read_csv <- possibly(read_csv, otherwise = NA)
     
-    dat <- tibble(date = seq.Date(mdy('1/27/2020'), Sys.Date(), '1 day'),
+    url <-
+        'https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_daily_reports/'
+    
+    
+    dat <- tibble(date = seq.Date(mdy('3/22/2020') - days(2), Sys.Date(), '1 day'),
                   file = paste0(format(date, '%m-%d-%Y'), '.csv')) %>%
         mutate(
             url = paste0(url, file),
@@ -95,14 +55,48 @@ download_covid_timeseries <- function() {
         ) %>%
         select(date, data) %>%
         filter(., !is.na(data)) %>%
-        unnest(data) %>%
+        unnest(data) %>% 
         janitor::clean_names() %>%
-        mutate_if(is.character, ~ parse_guess(.x))
+        filter(., str_detect(combined_key, 'California')) %>%
+        mutate_if(., is.character, ~ parse_guess(.x))
+    
+    pop <- readxl::read_excel('california_county_population.xlsx') %>%
+        mutate(
+            county = str_remove_all(county, '\\.')
+        )
+    
+    dat <- dat %>%
+        mutate(
+            county = paste0(admin2, ' County, California')
+        ) %>%
+        left_join(., pop) %>%
+        mutate(
+            rate = confirmed / population
+        ) %>%
+        group_nest(date) %>%
+        slice(n()) %>%
+        unnest(data) %>%
+        select(
+            date, combined_key, confirmed, deaths, population, long, lat, rate
+        ) %>%
+        filter(., confirmed != 0 & !is.na(population)) %>%
+        mutate(
+            rate_10000 = rate * 10000
+        ) %>%
+        mutate(
+            label = glue::glue('<strong>{combined_key}</strong> <br> 
+                               <strong>{confirmed}</strong> Confirmed Cases <br>
+                               <strong>{deaths}</strong> Deaths <br>
+                               <strong>{format(round(rate_10000, 2), 2)}</strong> per 10,000 people
+                               ' )
+        ) %>%
+        mutate(
+            label = map(label, ~ htmltools::HTML(.x))
+        )
     
     return(dat)
+    
 }
-
-time_series_data <- download_covid_timeseries()
 
 ################################## shiny dashboard components
 header <- dashboardHeader(
@@ -225,7 +219,7 @@ server <- function(input, output) {
     output$california_map <- renderLeaflet({
 
         make_california_map <- function() {
-            data <- load_california_data()
+            data <- download_california_data()
             
             legend_colors <-
                 colorNumeric('YlOrRd', c(min(data$confirmed), max(data$confirmed)))
@@ -261,8 +255,14 @@ server <- function(input, output) {
     })
     
     output$california_table <- DT::renderDataTable({
-        data <- load_california_data() %>% select(., combined_key, confirmed, deaths) %>% arrange(., desc(confirmed))
-        DT::datatable(data, colnames = c('Location', 'Confirmed', 'Deaths'))
+        data <- download_california_data() %>% 
+            select(., combined_key, confirmed, deaths, population, rate_10000) %>% 
+            arrange(., desc(confirmed)) %>%
+            mutate(rate_10000 = format(round(rate_10000, 2), 2)) %>%
+            mutate(death_10000 = format(round((deaths / population) * 10000, 2), 2)) %>%
+            mutate(combined_key = str_remove_all(combined_key, ', California, US')) 
+        
+        DT::datatable(data, colnames = c('Location', 'Confirmed', 'Deaths', 'Population', 'Cases per 10,000', 'Deaths per 10,000'))
     })
     
     output$box_last_update <- renderValueBox({
@@ -291,7 +291,7 @@ server <- function(input, output) {
                 'http://www.publichealth.lacounty.gov/media/Coronavirus/locations.htm'
             
             deaths <- read_html(url) %>%
-                html_node(xpath = '//*[@id="content"]/div[2]/table[1]/tbody/tr[1]/td') %>%
+                html_node(xpath = '//*[@id="content"]/div[2]/table[1]/tbody/tr[6]/td') %>%
                 html_text()
             
             return(deaths)
@@ -306,7 +306,7 @@ server <- function(input, output) {
                 'http://www.publichealth.lacounty.gov/media/Coronavirus/locations.htm'
             
             cases <- read_html(url) %>%
-                html_node(xpath = '//*[@id="content"]/div[2]/table[1]/tbody/tr[6]/td') %>%
+                html_node(xpath = '//*[@id="content"]/div[2]/table[1]/tbody/tr[1]/td') %>%
                 html_text()
             
             return(cases)
@@ -316,47 +316,6 @@ server <- function(input, output) {
         
     })
     
-    # output$timeseries_plot <- renderPlotly({
-    #     
-    # 
-    #     reactive_county <- reactive({input$input_county})
-    #     
-    #     make_trend_plot <- function(data, county) {
-    # 
-    #         plot_dat <- data %>% filter(., admin2 %in% county)
-    # 
-    #         label_dat <- plot_dat %>% group_by(., admin2) %>% slice(n())
-    # 
-    #         plot <- ggplot(plot_dat,
-    #                        aes(x = date, y = confirmed, color = admin2)) +
-    #             geom_point() +
-    #             geom_line() +
-    #             geom_text_repel(
-    #                 data = label_dat,
-    #                 aes(label = admin2),
-    #                 direction = 'y',
-    #                 hjust = 0,
-    #                 nudge_x = .1,
-    #                 size = 5
-    #             ) +
-    #             scale_x_date(limits = c(mdy('3/22/2020'), Sys.Date())) +
-    #             scale_y_continuous(limits = c(0, NA)) +
-    #             theme_minimal() +
-    #             theme(legend.position = 'none',
-    #                   axis.title.y = element_text(size = 15),
-    #                   axis.text = element_text(size = 12)) +
-    #             geom_smooth(method = 'lm',
-    #                         linetype = 'dotted',
-    #                         alpha = .25,
-    #                         se = F) +
-    #             labs(x = '', y = 'Confirmed COVID-19 Cases')
-    # 
-    #         return(plot)
-    #     }
-    #     
-    #     make_trend_plot(data = time_series_data, reactive_county()) %>% ggplotly()
-    #     
-    # })
 }
 
 # Run the application 

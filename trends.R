@@ -2,56 +2,69 @@ library(tidyverse)
 library(lubridate)
 library(skimr)
 library(ggrepel)
+library(leaflet)
 
-download_covid_timeseries <- function() {
+download_california_data <- function() {
+  
+  possibly_read_csv <- possibly(read_csv, otherwise = NA)
+  
   url <-
     'https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_daily_reports/'
   
   
-  dat <- tibble(date = seq.Date(mdy('1/27/2020'), Sys.Date(), '1 day'),
+  dat <- tibble(date = seq.Date(mdy('3/22/2020') - days(2), Sys.Date(), '1 day'),
                 file = paste0(format(date, '%m-%d-%Y'), '.csv')) %>%
     mutate(
       url = paste0(url, file),
       data = map(
         url,
-        ~ read_csv(.x, col_types = cols(.default = 'c')) %>% janitor::clean_names()
+        ~ possibly_read_csv(.x, col_types = cols(.default = 'c'))
       )
     ) %>%
     select(date, data) %>%
-    unnest(data)
+    filter(., !is.na(data)) %>%
+    unnest(data) %>% 
+    janitor::clean_names() %>%
+    filter(., str_detect(combined_key, 'California')) %>%
+    mutate_if(., is.character, ~ parse_guess(.x))
+  
+  pop <- readxl::read_excel('california_county_population.xlsx') %>%
+    mutate(
+      county = str_remove_all(county, '\\.')
+    )
+  
+  dat <- dat %>%
+    mutate(
+      county = paste0(admin2, ' County, California')
+    ) %>%
+    left_join(., pop) %>%
+    mutate(
+      rate = confirmed / population
+    ) %>%
+    group_nest(date) %>%
+    slice(n()) %>%
+    unnest(data) %>%
+    select(
+      date, combined_key, confirmed, deaths, population, long, lat, rate
+    ) %>%
+    mutate(
+      rate_10000 = rate * 10000
+    )
+  
 }
 
+dat <- download_california_data()
 
-dat <- dat %>%
-  select(date, data) %>%
-  unnest(data)
-
-
-dat1 <- dat %>%
-  filter(
-    !is.na(fips)
-  )
-
-dat1 <- dat1 %>%
-  mutate_if(is.character, ~ parse_guess(.x)) %>% 
-  filter(., str_detect(combined_key, 'California'))
-
-
-pop <- readxl::read_excel('california_county_population.xlsx') %>%
-  mutate(
-    county = str_remove_all(county, '\\.')
-  )
-
-
-plot_dat <- dat1 %>%
-  mutate(
-    county = paste0(admin2, ' County, California')
-  ) %>%
-  left_join(., pop)
+dat
 
 
 
+url <- 'https://raw.githubusercontent.com/codeforamerica/click_that_hood/master/public/data/california-counties.geojson'
 
+
+leaflet() %>%
+  addTiles() %>%
+  addPolygons()
 
 
 make_trend_plot <- function(data, county) {
