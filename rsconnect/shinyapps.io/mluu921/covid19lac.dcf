@@ -5,8 +5,8 @@ account: mluu921
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 1979350
-bundleId: 2941292
+bundleId: 2941320
 url: https://mluu921.shinyapps.io/covid19lac/
-when: 1585522318.47665
+when: 1585522966.46518
 asMultiple: FALSE
 asStatic: FALSE

@@ -130,6 +130,7 @@ sidebar <- dashboardSidebar(
 body <- dashboardBody(
     tags$style(type = "text/css", "#map {height: calc(100vh - 300px) !important;}"),
     tags$style(type = "text/css", "#california_map {height: calc(100vh - 300px) !important;}"),
+    tags$style(type = "text/css", "#figure_county_timerseries {height: calc(100vh - 400px) !important;}"),
     tags$head(
         tags$script(
             '!function(d,s,id){var js,fjs=d.getElementsByTagName(s)    [0],p=/^http:/.test(d.location)?\'http\':\'https\';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+"://platform.twitter.com/widgets.js";fjs.parentNode.insertBefore(js,fjs);}}(document,"script","twitter-wjs");'
@@ -160,13 +161,13 @@ body <- dashboardBody(
                 selectInput(
                     'input_county',
                     'County',
-                    choices = unique(california_timeseries_data$county),
+                    choices = unique(california_timeseries_data[california_timeseries_data$cases >= 5,]$county),
                     selected = c('Los Angeles'),
                     selectize = T,
                     multiple = T
                 ),
-                plotlyOutput('figure_county_timerseries'),
-                DT::dataTableOutput('table_incidence_rate')
+                plotlyOutput('figure_county_timerseries')
+                # DT::dataTableOutput('table_incidence_rate')
             ), 
             tabPanel(
                 title = 'Twitter',
@@ -353,11 +354,14 @@ server <- function(input, output) {
         
         time_series_plot <- function(data, selected_county) {
             plot_data <- data %>%
-                filter(county %in% selected_county)
+                filter(county %in% selected_county) %>%
+                filter(., cases >= 5) %>%
+                group_by(county) %>%
+                mutate(., days_since_ten_cases = 1:n())
             
             plot_ly(
                 data = plot_data,
-                x = ~ date,
+                x = ~ days_since_ten_cases,
                 y = ~ cases,
                 color = ~ county,
                 colors = 'Set1',
@@ -365,7 +369,7 @@ server <- function(input, output) {
                 mode = 'lines+markers'
             ) %>%
                 layout(
-                    xaxis = list(title = ''),
+                    xaxis = list(title = 'Days Since 5 or More Confirmed COVID-19 Cases'),
                     yaxis = list(title = 'Confirmed COVID-19 Cases'),
                     legend = list(orientation = "h",   # show entries horizontally
                                   xanchor = "center",  # use center of legend as anchor
@@ -374,40 +378,42 @@ server <- function(input, output) {
             
         }
         
+        
         time_series_plot(california_timeseries_data, selected_county())
     })
     
-    output$table_incidence_rate <- DT::renderDataTable({
-        
-        # selected_county <- reactive({input$input_county})
-        
-        county_incidence_rate_table <- function(data) {
-            rate_table <- data %>%
-                group_nest(
-                    county
-                ) %>%
-                mutate(
-                    fit = map(data, ~ glm(cases ~ date, data = .x, family = poisson())),
-                    res = map(fit, ~ broom::tidy(.x, exponentiate = T, conf.int = T))
-                ) %>%
-                unnest(res) %>%
-                filter(., !str_detect(term, '(Intercept)')) %>%
-                mutate(
-                    p.value = ifelse(p.value < 0.001, '<0.001', format(round(p.value, 3), 3))
-                ) %>%
-                mutate_at(
-                    ., c('estimate', 'conf.low', 'conf.high'), ~ format(round(.x, 3), 3)
-                ) %>%
-                select(., county, 'irr' = estimate, conf.low, conf.high, p.value) %>%
-                arrange(., desc(irr))
-            
-            DT::datatable(rate_table, colnames = c('Incidence Rate', 'Conf.Low', 'Conf.High', 'p'),
-                          caption = NULL, rownames = F)
-        }
-        
-        county_incidence_rate_table(california_timeseries_data)
-        
-    })
+    # output$table_incidence_rate <- DT::renderDataTable({
+    #     
+    #     # selected_county <- reactive({input$input_county})
+    #     
+    #     county_incidence_rate_table <- function(data) {
+    #         rate_table <- data %>%
+    #             filter(., cases >= 10) %>%
+    #             group_nest(
+    #                 county
+    #             ) %>%
+    #             mutate(
+    #                 fit = map(data, ~ glm(cases ~ date, data = .x, family = poisson())),
+    #                 res = map(fit, ~ broom::tidy(.x, exponentiate = T, conf.int = T))
+    #             ) %>%
+    #             unnest(res) %>%
+    #             filter(., !str_detect(term, '(Intercept)')) %>%
+    #             mutate(
+    #                 p.value = ifelse(p.value < 0.001, '<0.001', format(round(p.value, 3), 3))
+    #             ) %>%
+    #             mutate_at(
+    #                 ., c('estimate', 'conf.low', 'conf.high'), ~ format(round(.x, 3), 3)
+    #             ) %>%
+    #             select(., county, 'irr' = estimate, conf.low, conf.high, p.value) %>%
+    #             arrange(., desc(irr))
+    #         
+    #         DT::datatable(rate_table, colnames = c('Incidence Rate', 'Conf.Low', 'Conf.High', 'p'),
+    #                       caption = NULL, rownames = F)
+    #     }
+    #     
+    #     county_incidence_rate_table(california_timeseries_data)
+    #     
+    # })
 }
 
 # Run the application 
