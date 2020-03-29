@@ -98,6 +98,23 @@ download_california_data <- function() {
     
 }
 
+download_california_county_timerseries <- function() {
+    url <-
+        'https://raw.githubusercontent.com/nytimes/covid-19-data/master/us-counties.csv'
+    
+    data <- read_csv(url)
+    
+    ca <- data %>%
+        filter(., state == 'California')
+    
+    return(ca)
+}
+
+california_timeseries_data <- download_california_county_timerseries()
+
+
+
+
 ################################## shiny dashboard components
 header <- dashboardHeader(
     title = 'Los Angeles County COVID-19 Tracker',
@@ -138,10 +155,19 @@ body <- dashboardBody(
             tabPanel(title = 'California',
                      leafletOutput('california_map'),
                      DT::dataTableOutput('california_table')),
-            # tabPanel(title = 'Time Series',
-            #          selectInput('input_county', 'County', choices = c('Los Angeles', 'San Diego'),
-            #                      selectize = T, multiple = T),
-            #          plotlyOutput('timeseries_plot')),
+            tabPanel(
+                title = 'Time Series',
+                selectInput(
+                    'input_county',
+                    'County',
+                    choices = unique(california_timeseries_data$county),
+                    selected = c('Los Angeles'),
+                    selectize = T,
+                    multiple = T
+                ),
+                plotlyOutput('figure_county_timerseries'),
+                DT::dataTableOutput('table_incidence_rate')
+            ), 
             tabPanel(
                 title = 'Twitter',
                 a(
@@ -161,7 +187,9 @@ body <- dashboardBody(
                 a(
                     'https://github.com/CSSEGISandData/COVID-19',
                     href = 'https://github.com/CSSEGISandData/COVID-19'
-                )
+                ),
+                h4('The New York Times, COVID-19 Data'),
+                a('https://github.com/nytimes/covid-19-data', href = 'https://github.com/nytimes/covid-19-data')
                 
             ),
             tabPanel(
@@ -319,6 +347,64 @@ server <- function(input, output) {
         
     })
     
+    output$figure_county_timerseries <- renderPlotly({
+        
+        selected_county <- reactive({input$input_county})
+        
+        time_series_plot <- function(data, selected_county) {
+            plot_data <- data %>%
+                filter(county %in% selected_county)
+            
+            plot_ly(
+                data = plot_data,
+                x = ~ date,
+                y = ~ cases,
+                color = ~ county,
+                colors = 'Set1',
+                type = 'scatter',
+                mode = 'lines+markers'
+            ) %>%
+                layout(
+                    xaxis = list(title = ''),
+                    yaxis = list(title = 'Confirmed COVID-19 Cases')
+                )
+            
+        }
+        
+        time_series_plot(california_timeseries_data, selected_county())
+    })
+    
+    output$table_incidence_rate <- DT::renderDataTable({
+        
+        # selected_county <- reactive({input$input_county})
+        
+        county_incidence_rate_table <- function(data) {
+            rate_table <- data %>%
+                group_nest(
+                    county
+                ) %>%
+                mutate(
+                    fit = map(data, ~ glm(cases ~ date, data = .x, family = poisson())),
+                    res = map(fit, ~ broom::tidy(.x, exponentiate = T, conf.int = T))
+                ) %>%
+                unnest(res) %>%
+                filter(., !str_detect(term, '(Intercept)')) %>%
+                mutate(
+                    p.value = ifelse(p.value < 0.001, '<0.001', format(round(p.value, 3), 3))
+                ) %>%
+                mutate_at(
+                    ., c('estimate', 'conf.low', 'conf.high'), ~ format(round(.x, 3), 3)
+                ) %>%
+                select(., county, 'irr' = estimate, conf.low, conf.high, p.value) %>%
+                arrange(., desc(irr))
+            
+            DT::datatable(rate_table, colnames = c('Incidence Rate', 'Conf.Low', 'Conf.High', 'p'),
+                          caption = NULL, rownames = F)
+        }
+        
+        county_incidence_rate_table(california_timeseries_data)
+        
+    })
 }
 
 # Run the application 
