@@ -21,7 +21,6 @@ update_lac_dph_data <- function() {
   
 }
 
-
 update_lac_dph_data_summary <- function() {
   url <- 'http://publichealth.lacounty.gov/media/Coronavirus/locations.htm'
   
@@ -41,12 +40,16 @@ update_lac_dph_data_summary <- function() {
   
 }
 
+sheets_auth(
+  email = 'mluu921@gmail.com',
+  path = NULL,
+  scopes = "https://www.googleapis.com/auth/spreadsheets",
+  cache = gargle::gargle_oauth_cache(),
+  use_oob = gargle::gargle_oob_default(),
+  token = NULL
+)
+
 update_lac_dph_data()
 update_lac_dph_data_summary()
-
-
-
-
-
 
 
