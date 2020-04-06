@@ -1,0 +1,164 @@
+---
+title: "Los Angeles County - COVID19 Tracker"
+runtime: shiny
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    vertical_layout: fill
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(googlesheets4)
+library(tidyverse)
+library(leaflet)
+
+sheets_deauth()
+
+load_data <- function(sheet = as.character(Sys.Date())) {
+  id <-
+    'https://docs.google.com/spreadsheets/d/1lZ7QJ2jKC0fHh4f3FkyB4WC-7EUNwiBwP9wX9WjTdLw/edit?usp=sharing'
+  
+  data <- googlesheets4::read_sheet(id, sheet = sheet)
+  
+  geo <- googlesheets4::read_sheet(id, sheet = 'geocode')
+  
+  data <- data %>%
+    left_join(., geo) %>%
+    mutate(across(c(count, rate), ~ as.numeric(.x)))
+  
+  return(data)
+}
+
+load_sheet <- function(sheet = as.character(Sys.Date())) {
+  id <-
+    'https://docs.google.com/spreadsheets/d/1lZ7QJ2jKC0fHh4f3FkyB4WC-7EUNwiBwP9wX9WjTdLw/edit?usp=sharing'
+  
+  data <- googlesheets4::read_sheet(id, sheet = sheet)
+  
+  return(data)
+}
+
+update <- load_sheet(sheet = 'summary')
+
+possibly_load_data <- possibly(load_data, otherwise = NA, quiet = T)
+
+data <- tibble(date = rev(seq.Date(Sys.Date() - 7, Sys.Date(), '1 day'))) %>%
+  mutate(data = map(date, ~ possibly_load_data(sheet = as.character(.x)))) %>%
+  mutate(type = map_lgl(data, ~ is.tibble(.x))) %>%
+  filter(type == T) %>%
+  pull(data) %>% .[[1]]
+
+
+```
+
+Los Angeles County
+===
+
+Row
+---
+
+### Last Updated
+```{r}
+valueBox(tail(format(update$date, '%B %d, %Y')))
+```
+
+### Total Confirmed Cases
+```{r}
+valueBox(tail(update$total_cases), color = 'warning')
+```
+
+### Total Deaths
+```{r}
+valueBox(tail(update$total_deaths), color = 'danger')
+```
+
+Row
+---
+
+### Los Angeles County COVID19
+
+```{r}
+
+make_lac_map <- function() {
+  data <- data %>%
+    filter(!is.na(count) & count != 0) %>%
+    filter(., locations != 'Los Angeles') %>%
+    filter(., locations != '- Under Investigation') %>%
+    mutate(
+      label = glue::glue(
+        '<strong>{locations}</strong> <br> <strong>{count}</strong> Confirmed Cases <br>
+          <strong>{rate}</strong> per 100,000 people'
+      )
+    ) %>%
+    mutate(label = map(label, ~ htmltools::HTML(.x)))
+  
+  color_scale <-
+    colorNumeric('YlOrRd', c(min(data$count, na.rm = T),
+                             max(data$count, na.rm = T)))
+  
+  leaflet(data) %>%
+    addProviderTiles(providers$CartoDB.Positron) %>%
+    addCircleMarkers(
+      lng = ~ lon,
+      lat = ~ lat,
+      label = ~ label,
+      radius = ~ sqrt(count),
+      fillColor = ~ color_scale(count),
+      fillOpacity = .75,
+      color = 'black',
+      opacity = .5
+    ) %>%
+    addLegend(pal = color_scale,
+              values = ~ count,
+              title = 'COVID-19 Cases')
+}
+
+make_lac_map()
+
+```
+
+### Data
+
+```{r}
+make_table <- function() {
+  data %>%
+    filter(!is.na(count) & count != 0) %>%
+    filter(., locations != 'Los Angeles') %>%
+    filter(., locations != '- Under Investigation') %>%
+    select(
+      locations, count, rate
+    ) %>%
+    arrange(desc(count))
+}
+
+DT::datatable(make_table(),
+              colnames = c('Location', 'Confirmed Cases', 'Rate/100,000'),
+              rownames = F)
+
+
+
+```
+
+> Source: http://publichealth.lacounty.gov/media/Coronavirus/locations.htm
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
