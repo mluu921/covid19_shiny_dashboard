@@ -62,17 +62,17 @@ Row
 
 ### Last Updated
 ```{r}
-valueBox(tail(format(update$date, '%B %d, %Y')))
+valueBox(tail(format(update$date, '%B %d, %Y'), n = 1))
 ```
 
 ### Total Confirmed Cases
 ```{r}
-valueBox(tail(update$total_cases), color = 'warning')
+valueBox(tail(update$total_cases, n = 1), color = 'warning')
 ```
 
 ### Total Deaths
 ```{r}
-valueBox(tail(update$total_deaths), color = 'danger')
+valueBox(tail(update$total_deaths, n = 1), color = 'danger')
 ```
 
 Row
