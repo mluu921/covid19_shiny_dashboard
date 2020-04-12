@@ -14,6 +14,7 @@ library(flexdashboard)
 library(googlesheets4)
 library(tidyverse)
 library(leaflet)
+library(plotly)
 
 sheets_deauth()
 
@@ -41,6 +42,31 @@ load_sheet <- function(sheet = as.character(Sys.Date())) {
   return(data)
 }
 
+load_new_cases_dat <- function() {
+  url <- 'https://raw.githubusercontent.com/nytimes/covid-19-data/master/us-counties.csv'
+  
+  df <- read_csv(url)
+  
+  dat <- df %>%
+    filter(
+      state == 'California'
+    ) %>%
+    group_by(
+      county
+    ) %>%
+    mutate(
+      new_cases = cases - lag(cases)
+    )
+  
+  
+  dat <- dat %>%
+    filter(
+      county == 'Los Angeles'
+    )
+  
+  return(dat)
+}
+
 update <- load_sheet(sheet = 'summary')
 
 possibly_load_data <- possibly(load_data, otherwise = NA, quiet = T)
@@ -52,10 +78,12 @@ data <- tibble(date = rev(seq.Date(Sys.Date() - 7, Sys.Date(), '1 day'))) %>%
   pull(data) %>% .[[1]]
 
 
+
+new_cases_dat <- load_new_cases_dat()
 ```
 
-Los Angeles County
-===
+<!-- Los Angeles County -->
+<!-- === -->
 
 Row
 ---
@@ -144,8 +172,38 @@ DT::datatable(make_table(),
 
 > Source: http://publichealth.lacounty.gov/media/Coronavirus/locations.htm
 
+Row
+---
 
+### Distribution of New Cases
+```{r}
+make_new_cases_plot <- function(data) {
+  
+  data <- data %>%
+  mutate(
+    label = glue::glue("<b>{format(date, '%B %d, %Y')}</b> <br> <b>New Cases:</b> {new_cases}"),
+    label = map(label, ~ htmltools::HTML(.x))
+  )
 
+  
+  plot_ly(data,
+          x = ~ date,
+          y = ~ new_cases,
+          type = 'bar',
+          text = ~ label,
+          hoverinfo = 'text'
+  ) %>%
+    layout(xaxis = list(title = 'Date'),
+           yaxis = list(title = 'New Cases'))
+  
+}
+
+plotly::renderPlotly({
+  make_new_cases_plot(new_cases_dat)
+})
+```
+
+> Source: https://github.com/nytimes/covid-19-data
 
 
 
