@@ -183,7 +183,10 @@ make_new_cases_plot <- function(data) {
   mutate(
     label = glue::glue("<b>{format(date, '%B %d, %Y')}</b> <br> <b>New Cases:</b> {new_cases}"),
     label = map(label, ~ htmltools::HTML(.x))
-  )
+  ) %>%
+    filter(
+      new_cases != 0
+    )
 
   
   plot_ly(data,
