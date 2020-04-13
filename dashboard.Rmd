@@ -71,7 +71,7 @@ update <- load_sheet(sheet = 'summary')
 
 possibly_load_data <- possibly(load_data, otherwise = NA, quiet = T)
 
-data <- tibble(date = rev(seq.Date(Sys.Date() - 7, Sys.Date(), '1 day'))) %>%
+data <- tibble(date = rev(seq.Date(Sys.Date() - 1, Sys.Date(), '1 day'))) %>%
   mutate(data = map(date, ~ possibly_load_data(sheet = as.character(.x)))) %>%
   mutate(type = map_lgl(data, ~ is.tibble(.x))) %>%
   filter(type == T) %>%
